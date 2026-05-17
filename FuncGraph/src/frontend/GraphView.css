@@ -435,3 +435,100 @@
   .fn-badge-sym { display: none; }
   .send-btn span { display: none; }
 }
+
+
+/* Custom Editable Limits Styling */
+.editable-limits {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.limit-field {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: rgba(255,255,255,0.3);
+}
+
+.limit-input {
+  width: 55px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 4px;
+  color: rgba(255,255,255,0.6);
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  text-align: center;
+  padding: 1px 2px;
+}
+
+.limit-input:focus {
+  border-color: var(--fn-color);
+  color: #fff;
+  outline: none;
+}
+
+/* Chrome, Safari, Edge, Opera: remove arrows */
+.limit-input::-webkit-outer-spin-button,
+.limit-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Firefox: remove arrows */
+.limit-input[type=number] {
+  -moz-appearance: textfield;
+}
+
+/* Zoom Controls Styling */
+.zoom-controls {
+  position: absolute;
+  bottom: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 10;
+}
+
+.zoom-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: rgba(13, 15, 26, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  transition: background 0.2s, border-color 0.2s, transform 0.1s;
+}
+
+.zoom-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.zoom-btn:active {
+  transform: scale(0.95);
+}
+
+.zoom-btn.reset-view {
+  font-size: 16px;
+}
+
+/* Grab cursors for panning */
+.graph-canvas-wrap.grab {
+  cursor: grab;
+}
+
+.graph-canvas-wrap.grabbing {
+  cursor: grabbing;
+}

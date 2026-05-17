@@ -8,6 +8,13 @@ const DEFAULTS = {
   verticalShift: 0,
 }
 
+const INITIAL_LIMITS = {
+  amplitude: { min: -4, max: 4, step: 0.1 },
+  frequency: { min: 0.1, max: 6, step: 0.1 },
+  phase: { min: -3.14, max: 3.14, step: 0.05 },
+  verticalShift: { min: -4, max: 4, step: 0.1 },
+}
+
 const FORMULA_DISPLAY = {
   sin:    (p) => `f(x) = ${fmt(p.amplitude)} · sin(${fmt(p.frequency)}x ${fmtPhase(p.phase)}) ${fmtShift(p.verticalShift)}`,
   cos:    (p) => `f(x) = ${fmt(p.amplitude)} · cos(${fmt(p.frequency)}x ${fmtPhase(p.phase)}) ${fmtShift(p.verticalShift)}`,
@@ -42,18 +49,46 @@ const MATH_FN = {
 }
 
 const SLIDERS = [
-  { key: 'amplitude',     label: 'Amplitude (A)',    min: -4,   max: 4,    step: 0.1,  symbol: 'A', unit: '' },
-  { key: 'frequency',     label: 'Frequência (B)',   min: 0.1,  max: 6,    step: 0.1,  symbol: 'B', unit: '' },
-  { key: 'phase',         label: 'Fase (C)',         min: -Math.PI, max: Math.PI, step: 0.05, symbol: 'C', unit: ' rad' },
-  { key: 'verticalShift', label: 'Deslocamento (D)', min: -4,   max: 4,    step: 0.1,  symbol: 'D', unit: '' },
+  { key: 'amplitude',     label: 'Amplitude (A)',    symbol: 'A', unit: '' },
+  { key: 'frequency',     label: 'Frequência (B)',   symbol: 'B', unit: '' },
+  { key: 'phase',         label: 'Fase (C)',         symbol: 'C', unit: ' rad' },
+  { key: 'verticalShift', label: 'Deslocamento (D)', symbol: 'D', unit: '' },
 ]
+
+function getPiLabel(v) {
+  const mult = v / (Math.PI / 2)
+  const r = Math.round(mult)
+  if (Math.abs(mult - r) > 0.01) return ''
+  if (r === 0) return '0'
+  
+  if (r % 2 === 0) {
+    const k = r / 2
+    if (k === 1) return 'π'
+    if (k === -1) return '-π'
+    return `${k}π`
+  } else {
+    if (r === 1) return 'π/2'
+    if (r === -1) return '-π/2'
+    return `${r}π/2`
+  }
+}
 
 export default function GraphView({ selectedFunction, onBack }) {
   const [params, setParams] = useState({ ...DEFAULTS })
-  // Raw text while user is typing — key → string | null (null = not editing)
+  const [limits, setLimits] = useState({ ...INITIAL_LIMITS })
   const [drafts, setDrafts] = useState({})
-  const [apiStatus, setApiStatus] = useState('idle') // idle | loading | success | error
+  const [apiStatus, setApiStatus] = useState('idle')
+  
+  // Zoom e Pan States
+  const [zoom, setZoom] = useState(1)
+  const [pan, setPan] = useState({ x: 0, y: 0 })
+  const [isDragging, setIsDragging] = useState(false)
+
   const canvasRef = useRef(null)
+  const isDraggingRef = useRef(false)
+  const dragStartRef = useRef({ x: 0, y: 0 })
+  const panStartRef = useRef({ x: 0, y: 0 })
+
   const { id, label, symbol, color } = selectedFunction
 
   const drawGraph = useCallback(() => {
@@ -66,58 +101,95 @@ export default function GraphView({ selectedFunction, onBack }) {
 
     ctx.clearRect(0, 0, W, H)
 
+    // Viewport transforms
+    const xRangeBase = 4 * Math.PI
+    const yRangeBase = 5
+
+    const scaleX = (W / xRangeBase) * zoom
+    const scaleY = ((H / 2 - 20) / yRangeBase) * zoom
+
+    const centerX = W / 2 + pan.x
+    const centerY = H / 2 + pan.y
+
+    const toX = (x) => centerX + x * scaleX
+    const toY = (y) => centerY - y * scaleY
+
+    const fromX = (px) => (px - centerX) / scaleX
+    const fromY = (py) => (centerY - py) / scaleY
+
+    const xMinVis = fromX(0)
+    const xMaxVis = fromX(W)
+    const yMinVis = fromY(H)
+    const yMaxVis = fromY(0)
+
     // Background grid
     ctx.strokeStyle = 'rgba(255,255,255,0.05)'
     ctx.lineWidth = 1
-    const xRange = 4 * Math.PI
-    const yRange = 5
-    const toX = (x) => ((x + xRange / 2) / xRange) * W
-    const toY = (y) => H / 2 - (y / yRange) * (H / 2 - 20)
 
-    // Vertical grid lines
-    for (let x = -Math.PI * 2; x <= Math.PI * 2; x += Math.PI / 2) {
+    // Vertical grid lines (multiples of pi/2)
+    const stepX = Math.PI / 2
+    const firstX = Math.ceil(xMinVis / stepX) * stepX
+    const lastX = Math.floor(xMaxVis / stepX) * stepX
+
+    ctx.fillStyle = 'rgba(255,255,255,0.3)'
+    ctx.font = '11px Space Mono, monospace'
+
+    for (let x = firstX; x <= lastX; x += stepX) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.05)'
+      ctx.lineWidth = 1
       ctx.beginPath()
       ctx.moveTo(toX(x), 0)
       ctx.lineTo(toX(x), H)
       ctx.stroke()
+
+      const lbl = getPiLabel(x)
+      if (lbl) {
+        ctx.textAlign = 'center'
+        let labelY = toY(0) + 16
+        if (labelY < 16) labelY = 16
+        if (labelY > H - 8) labelY = H - 8
+        ctx.fillText(lbl, toX(x), labelY)
+      }
     }
+
     // Horizontal grid lines
-    for (let y = -4; y <= 4; y++) {
+    const stepY = 1
+    const firstY = Math.ceil(yMinVis / stepY) * stepY
+    const lastY = Math.floor(yMaxVis / stepY) * stepY
+
+    ctx.textAlign = 'right'
+    for (let y = firstY; y <= lastY; y += stepY) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.05)'
+      ctx.lineWidth = 1
       ctx.beginPath()
       ctx.moveTo(0, toY(y))
       ctx.lineTo(W, toY(y))
       ctx.stroke()
+
+      if (Math.abs(y) > 0.001 || toX(0) < 0 || toX(0) > W) {
+        let labelX = toX(0) - 6
+        if (labelX < 24) labelX = 24
+        if (labelX > W - 12) labelX = W - 12
+        ctx.fillText(Math.round(y * 100) / 100, labelX, toY(y) + 4)
+      }
     }
 
     // Axes
     ctx.strokeStyle = 'rgba(255,255,255,0.25)'
     ctx.lineWidth = 1.5
     // X-axis
-    ctx.beginPath()
-    ctx.moveTo(0, toY(0))
-    ctx.lineTo(W, toY(0))
-    ctx.stroke()
+    if (toY(0) >= 0 && toY(0) <= H) {
+      ctx.beginPath()
+      ctx.moveTo(0, toY(0))
+      ctx.lineTo(W, toY(0))
+      ctx.stroke()
+    }
     // Y-axis
-    ctx.beginPath()
-    ctx.moveTo(toX(0), 0)
-    ctx.lineTo(toX(0), H)
-    ctx.stroke()
-
-    // Axis labels
-    ctx.fillStyle = 'rgba(255,255,255,0.3)'
-    ctx.font = '11px Space Mono, monospace'
-    ctx.textAlign = 'center'
-    const piLabels = [
-      [-Math.PI * 2, '-2π'], [-Math.PI * 1.5, '-3π/2'], [-Math.PI, '-π'],
-      [-Math.PI / 2, '-π/2'], [0, '0'], [Math.PI / 2, 'π/2'],
-      [Math.PI, 'π'], [Math.PI * 1.5, '3π/2'], [Math.PI * 2, '2π'],
-    ]
-    piLabels.forEach(([xv, lbl]) => {
-      ctx.fillText(lbl, toX(xv), toY(0) + 16)
-    })
-    ctx.textAlign = 'right'
-    for (let y = -4; y <= 4; y++) {
-      if (y !== 0) ctx.fillText(y, toX(0) - 6, toY(y) + 4)
+    if (toX(0) >= 0 && toX(0) <= W) {
+      ctx.beginPath()
+      ctx.moveTo(toX(0), 0)
+      ctx.lineTo(toX(0), H)
+      ctx.stroke()
     }
 
     // Function curve
@@ -135,7 +207,7 @@ export default function GraphView({ selectedFunction, onBack }) {
 
     ctx.beginPath()
     for (let i = 0; i <= steps; i++) {
-      const x = -xRange / 2 + (i / steps) * xRange
+      const x = xMinVis + (i / steps) * (xMaxVis - xMinVis)
       const y = fn(x, amplitude, frequency, phase, verticalShift)
 
       if (!isFinite(y) || isNaN(y)) {
@@ -149,8 +221,7 @@ export default function GraphView({ selectedFunction, onBack }) {
       const px = toX(x)
       const py = toY(y)
 
-      // Discontinuity detection for tan
-      if (prevY !== null && Math.abs(py - prevY) > H * 0.7) {
+      if (prevY !== null && Math.abs(py - prevY) > H * 1.5) {
         ctx.stroke()
         ctx.beginPath()
         started = false
@@ -166,7 +237,7 @@ export default function GraphView({ selectedFunction, onBack }) {
     }
     ctx.stroke()
     ctx.shadowBlur = 0
-  }, [params, id, color])
+  }, [params, id, color, zoom, pan])
 
   useEffect(() => {
     drawGraph()
@@ -185,30 +256,90 @@ export default function GraphView({ selectedFunction, onBack }) {
     return () => ro.disconnect()
   }, [drawGraph])
 
+  // Mouse wheel zoom event hook
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    const handleWheel = (e) => {
+      e.preventDefault()
+      const zoomFactor = 1.15
+      if (e.deltaY < 0) {
+        setZoom(z => Math.min(50, z * zoomFactor))
+      } else {
+        setZoom(z => Math.max(0.05, z / zoomFactor))
+      }
+    }
+
+    canvas.addEventListener('wheel', handleWheel, { passive: false })
+    return () => {
+      canvas.removeEventListener('wheel', handleWheel)
+    }
+  }, [])
+
   const handleSlider = (key, value) => {
     const num = parseFloat(value)
     setParams((prev) => ({ ...prev, [key]: num }))
-    // Keep draft in sync if user isn't actively typing in this field
     setDrafts((prev) => ({ ...prev, [key]: null }))
   }
 
-  // While typing: store raw string, don't touch params yet
   const handleInputChange = (key, raw) => {
     setDrafts((prev) => ({ ...prev, [key]: raw }))
   }
 
-  // On blur or Enter: parse, clamp, commit to params
   const handleInputCommit = (key, raw, s) => {
     setDrafts((prev) => ({ ...prev, [key]: null }))
     const num = parseFloat(raw)
     if (isNaN(num)) return
-    const clamped = Math.min(s.max, Math.max(s.min, num))
-    setParams((prev) => ({ ...prev, [key]: Math.round(clamped / s.step) * s.step }))
+    const currentMin = limits[key].min
+    const currentMax = limits[key].max
+    const currentStep = limits[key].step
+    const clamped = Math.min(currentMax, Math.max(currentMin, num))
+    setParams((prev) => ({ ...prev, [key]: Math.round(clamped / currentStep) * currentStep }))
+  }
+
+  const handleLimitChange = (key, type, value) => {
+    const num = parseFloat(value)
+    if (isNaN(num)) return
+    setLimits((prev) => ({
+      ...prev,
+      [key]: { ...prev[key], [type]: num }
+    }))
   }
 
   const handleReset = () => {
     setParams({ ...DEFAULTS })
     setDrafts({})
+    setLimits({ ...INITIAL_LIMITS })
+    setZoom(1)
+    setPan({ x: 0, y: 0 })
+  }
+
+  // Pointer drag for panning
+  const handlePointerDown = (e) => {
+    isDraggingRef.current = true
+    setIsDragging(true)
+    dragStartRef.current = { x: e.clientX, y: e.clientY }
+    panStartRef.current = { ...pan }
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+
+  const handlePointerMove = (e) => {
+    if (!isDraggingRef.current) return
+    const dx = e.clientX - dragStartRef.current.x
+    const dy = e.clientY - dragStartRef.current.y
+    setPan({
+      x: panStartRef.current.x + dx,
+      y: panStartRef.current.y + dy
+    })
+  }
+
+  const handlePointerUp = (e) => {
+    if (isDraggingRef.current) {
+      isDraggingRef.current = false
+      setIsDragging(false)
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    }
   }
 
   const handleSendToBackend = async () => {
@@ -283,7 +414,11 @@ export default function GraphView({ selectedFunction, onBack }) {
           <div className="sliders-list">
             {SLIDERS.map((s) => {
               const val = params[s.key]
-              const pct = ((val - s.min) / (s.max - s.min)) * 100
+              const currentMin = limits[s.key].min
+              const currentMax = limits[s.key].max
+              const currentStep = limits[s.key].step
+
+              const pct = Math.min(100, Math.max(0, ((val - currentMin) / (currentMax - currentMin)) * 100))
               const isDrafting = drafts[s.key] != null
               const displayVal = isDrafting
                 ? drafts[s.key]
@@ -303,18 +438,18 @@ export default function GraphView({ selectedFunction, onBack }) {
                         className={`value-input ${isDrafting ? 'is-drafting' : ''}`}
                         value={displayVal}
                         onChange={(e) => handleInputChange(s.key, e.target.value)}
-                        onBlur={(e) => handleInputCommit(s.key, e.target.value, s)}
+                        onBlur={(e) => handleInputCommit(s.key, e.target.value, limits[s.key])}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             e.target.blur()
                           } else if (e.key === 'ArrowUp') {
                             e.preventDefault()
-                            const next = Math.min(s.max, val + s.step)
+                            const next = Math.min(currentMax, val + currentStep)
                             setParams((prev) => ({ ...prev, [s.key]: Math.round(next * 1000) / 1000 }))
                             setDrafts((prev) => ({ ...prev, [s.key]: null }))
                           } else if (e.key === 'ArrowDown') {
                             e.preventDefault()
-                            const next = Math.max(s.min, val - s.step)
+                            const next = Math.max(currentMin, val - currentStep)
                             setParams((prev) => ({ ...prev, [s.key]: Math.round(next * 1000) / 1000 }))
                             setDrafts((prev) => ({ ...prev, [s.key]: null }))
                           }
@@ -331,18 +466,38 @@ export default function GraphView({ selectedFunction, onBack }) {
                   <div className="slider-track-wrap">
                     <input
                       type="range"
-                      min={s.min}
-                      max={s.max}
-                      step={s.step}
+                      min={currentMin}
+                      max={currentMax}
+                      step={currentStep}
                       value={val}
                       onChange={(e) => handleSlider(s.key, e.target.value)}
                       className="slider-input"
                       style={{ '--fn-color': color, '--pct': `${pct}%` }}
                     />
                   </div>
-                  <div className="slider-minmax">
-                    <span>{Math.round(s.min * 100) / 100}{s.unit}</span>
-                    <span>{Math.round(s.max * 100) / 100}{s.unit}</span>
+                  
+                  {/* Limites Editáveis */}
+                  <div className="slider-minmax editable-limits">
+                    <div className="limit-field">
+                      <span>Mín:</span>
+                      <input 
+                        type="number" 
+                        value={Math.round(currentMin * 100) / 100}
+                        step={currentStep}
+                        onChange={(e) => handleLimitChange(s.key, 'min', e.target.value)}
+                        className="limit-input"
+                      />
+                    </div>
+                    <div className="limit-field">
+                      <span>Máx:</span>
+                      <input 
+                        type="number" 
+                        value={Math.round(currentMax * 100) / 100}
+                        step={currentStep}
+                        onChange={(e) => handleLimitChange(s.key, 'max', e.target.value)}
+                        className="limit-input"
+                      />
+                    </div>
                   </div>
                 </div>
               )
@@ -350,7 +505,7 @@ export default function GraphView({ selectedFunction, onBack }) {
           </div>
 
           <button className="reset-btn" onClick={handleReset}>
-            ↺ Redefinir Padrões
+            ↺ Redefinir Tudo
           </button>
 
           <div className="info-box">
@@ -378,12 +533,25 @@ export default function GraphView({ selectedFunction, onBack }) {
         </aside>
 
         {/* Graph canvas */}
-        <div className="graph-canvas-wrap">
+        <div 
+          className={`graph-canvas-wrap ${isDragging ? 'grabbing' : 'grab'}`}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+        >
           <canvas ref={canvasRef} className="graph-canvas" />
           <div className="graph-label-x">x</div>
           <div className="graph-label-y">y</div>
           <div className="graph-fn-name" style={{ color }}>
             {symbol}
+          </div>
+
+          {/* Botões de Zoom integrados */}
+          <div className="zoom-controls">
+            <button className="zoom-btn" onClick={() => setZoom(z => Math.min(50, z * 1.25))} title="Aumentar Zoom">+</button>
+            <button className="zoom-btn" onClick={() => setZoom(z => Math.max(0.05, z / 1.25))} title="Diminuir Zoom">−</button>
+            <button className="zoom-btn reset-view" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }} title="Centralizar Gráfico">⌂</button>
           </div>
         </div>
       </div>
