@@ -1,0 +1,13 @@
+Amplitude = B
+Frequência = C
+Fase = D
+Deslocamento = A
+
+
+
+Observação adicional: Aumente as fontes de texto e pense no design do app para que funcione em projetores novos e antigos nas escolas, de modo que os alunos consigam ver tanto o que está escrito na lateral, que são as informações de parâmetros, quanto as funções adicionadas e seu formato padrão.
+Poder modificar entre ver a função e ver somente um período --> essa nova funcionalidade implica que, durante o uso da aplicação, o usuário pode limitar os quadrantes e os intervalos de visualização da aplicação. Isso serve para melhorar o foco dos alunos na hora de ver os gráficos.
+
+
+Personalização de aparência do gráfico
+Adição de novas funções
