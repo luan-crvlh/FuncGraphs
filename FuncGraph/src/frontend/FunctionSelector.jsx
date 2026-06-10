@@ -66,8 +66,8 @@ export default function FunctionSelector({ onSelect }) {
 
       <header className="selector-header">
         <div className="logo-area">
-          <span className="logo-icon">∿</span>
-          <span className="logo-text">FuncGraph</span>
+          <span className="logo-icon"><img src="./32x32.png"></img></span>
+          <span className="logo-text">Matemática Com Café - Funções Trigonométricas</span>
         </div>
         <p className="selector-subtitle">
           Explorador Interativo de Funções Trigonométricas

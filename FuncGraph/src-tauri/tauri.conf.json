@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "funcgraph",
-  "version": "0.1.0",
-  "identifier": "com.funcgraph",
+  "productName": "matematicacomcafe",
+  "version": "0.2.0",
+  "identifier": "com.matematicacomcafe",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
@@ -12,11 +12,11 @@
   "app": {
     "windows": [
       {
-        "title": "FuncGraph",
+        "title": "MatematicaComCafe",
         "width": 800,
         "height": 600,
         "resizable": true,
-        "fullscreen": false
+        "fullscreen": true
       }
     ],
     "security": {
