@@ -77,3 +77,28 @@ FuncGraph/
 ├── api/                       # Servidor local mock (Node.js) para requisições
 ├── package.json               # Gerenciador de dependências Node (Vite/React/Plugins)
 └── eslint.config.js           # Padronização de qualidade de código
+---
+
+## 🎯 Por que foi feito
+
+Professores costumam desenhar funções trigonométricas no quadro, e os alunos precisam imaginar como a curva muda quando um coeficiente muda. O FuncGraph mostra essa mudança na hora, enquanto o parâmetro é ajustado. O app foi pensado para uso em sala com projetor, por isso a meta de textos grandes e da opção de limitar o intervalo exibido para manter o foco dos alunos.
+
+---
+
+## ▶️ Como executar
+
+Requisitos: Node.js, Rust e as dependências de sistema do [Tauri v2](https://v2.tauri.app/start/prerequisites/).
+
+```bash
+cd FuncGraph
+npm install
+
+# Versão web, no navegador
+npm run dev
+
+# Versão desktop
+npm run tauri dev
+
+# Instalador para Windows (.msi), copiado para ./execute
+npm run build:desktop
+```
